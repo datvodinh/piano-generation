@@ -2,7 +2,6 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 from transformers import TransfoXLConfig, TransfoXLModel, GPT2Model, GPT2Config
-import torch.nn.functional as F
 import math
 from torch.optim.lr_scheduler import OneCycleLR
 
@@ -30,7 +29,6 @@ class MusicGenerativeModel(pl.LightningModule):
                                   hidden_size = d_model,
                                   num_layers  = nlayers,
                                   batch_first = batch_first)
-            self.linear  = nn.Linear(d_model,vocab_size)
             self.forward = self._forward_lstm
 
         elif model_type == 'transformer':
@@ -44,7 +42,6 @@ class MusicGenerativeModel(pl.LightningModule):
                                                 dim_feedforward  = dim_feedforward,
                                                 batch_first      = batch_first)  
             self.model   = nn.TransformerDecoder(layer, num_layers = nlayers)
-            self.fc      = nn.Linear(d_model,vocab_size)
             self.forward = self._forward_transformer
         
         elif model_type == 'transformer_xl':
@@ -57,7 +54,6 @@ class MusicGenerativeModel(pl.LightningModule):
                                  dropout    = dropout)
         
             self.model        = TransfoXLModel(config)
-            self.fc           = nn.Linear(d_model,vocab_size)
             self.batch_first  = batch_first
             self.forward      = self._forward_transformer_xl
 
@@ -70,9 +66,10 @@ class MusicGenerativeModel(pl.LightningModule):
                                     attn_pdrop  = dropout)
         
             self.model        = GPT2Model(gpt2_config)
-            self.fc           = nn.Linear(d_model,vocab_size)
             self.batch_first  = batch_first
             self.forward      = self._forward_transformer_xl
+
+        self.fc = nn.Linear(d_model,vocab_size,bias=False)
 
         self.optim_config = {
             'lr':lr,
@@ -81,12 +78,14 @@ class MusicGenerativeModel(pl.LightningModule):
             'total_steps':total_steps,
             'pct_start':pct_start
             }
+        
+        self.criterion = nn.CrossEntropyLoss()
 
 
     def training_step(self,batch,batch_idx):
         src,tgt = batch
         outputs = self.forward(src)
-        loss    = F.nll_loss(outputs,tgt)
+        loss    = self.criterion(outputs,tgt)
         acc     = (outputs.view(-1,outputs.shape[-1]).argmax(dim=1) == tgt).float().mean()
         self.log('train_loss',loss.detach())
         self.log('train_accuracy',acc)
@@ -112,21 +111,21 @@ class MusicGenerativeModel(pl.LightningModule):
     def _forward_lstm(self,x):
         x   = self.embed(x) # B S E
         x,_ = self.model(x) # B S E
-        x   = self.linear(x) # B S V
+        x   = self.fc(x)    # B S V
         return x
 
     def _forward_transformer(self,x):
-        x = self.embed(x) * math.sqrt(self.d_model) # B S E
-        x = self.position_embed(x) # B S E
+        x = self.embed(x) * math.sqrt(self.d_model)       # B S E
+        x = self.position_embed(x)                        # B S E
         x = self.model(x,x,tgt_mask=self._target_mask(x)) # B S E
-        x = self.fc(x) # B S V
+        x = self.fc(x)                                    # B S V
         return x['last_hidden_state']
     
     def _forward_transformer_xl(self,x):
         if self.batch_first:
-            x = x.transpose(0,1) # B S -> S B
-        x = self.model(x) # S B E
-        x = self.fc(x) # S B V
+            x = x.transpose(0,1)                     # B S -> S B
+        x = self.model(x)                            # S B E
+        x = self.fc(x)                               # S B V
         return x['last_hidden_state'].transpose(0,1) # S B V -> B S V
     
     def _target_mask(self,target):
