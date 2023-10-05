@@ -1,0 +1,7 @@
+input_size: 1
+hidden_size: 512
+num_layers: 2
+batch_first: true
+lr: 2e-4
+max_lr: 6e-4
+beta: (0.9, 0.999)

@@ -1,0 +1,10 @@
+vocab_size: 1000
+d_model: 512
+n_head: 8
+d_inner: 2048 
+n_layer: 6
+dropout: 0.1
+batch_first: True
+lr: 2e-4
+max_lr: 6e-4
+beta: (0.9, 0.999)
