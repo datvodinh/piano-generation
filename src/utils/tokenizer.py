@@ -1,9 +1,12 @@
 from mido import MidiFile, MidiTrack, Message, MetaMessage
-from vocab import *
-from torch import LongTensor
+from src.utils.vocab import *
+from torch import LongTensor, Tensor
+import os
+import sys
+sys.path.append(os.getcwd())
 class Tokenizer:
-    def midi2tensor(self, midi_file):
-        mid        = MidiFile(midi_file)
+    def midi2tensor(self, fname: str):
+        mid        = MidiFile(fname)
         delta_time = 0          # time between important midi messages
         event_list = []         # list of events in vocab
         encode_list = []         # list of indices in vocab
@@ -54,28 +57,33 @@ class Tokenizer:
                 encode_list.append(idx)
         return LongTensor(encode_list), event_list
 
-    def tensor2midi(self, encode_tensor, save_dir, tempo=512820):
-        mid = MidiFile()
+    def tensor2midi(self,
+                    encode_tensor:Tensor, 
+                    save_dir:str, 
+                    tempo=512820):
+
+        mid        = MidiFile()
         meta_track = MidiTrack()
-        track = MidiTrack()
+        track      = MidiTrack()
+        time_sig   = MetaMessage("time_signature")
+        time_sig   = time_sig.copy(numerator=4, denominator=4, time=0)    
+        key_sig    = MetaMessage("key_signature", time=0)     
+        set_tempo  = MetaMessage("set_tempo")
+        set_tempo  = set_tempo.copy(tempo=tempo, time=0)       
+        end        = MetaMessage("end_of_track").copy(time=0)       
+        program    = Message("program_change", channel=0, program=0, time=0)
+        cc         = Message("control_change", time=0)
+        
         meta_track.append(MetaMessage("track_name").copy(name=save_dir, time=0))
         meta_track.append(MetaMessage("smpte_offset"))
-        time_sig = MetaMessage("time_signature")
-        time_sig = time_sig.copy(numerator=4, denominator=4, time=0)
         meta_track.append(time_sig)
-        key_sig = MetaMessage("key_signature", time=0)
         meta_track.append(key_sig)
-        set_tempo = MetaMessage("set_tempo")
-        set_tempo = set_tempo.copy(tempo=tempo, time=0)
         meta_track.append(set_tempo)
-        end = MetaMessage("end_of_track").copy(time=0)
         meta_track.append(end)
-        program = Message("program_change", channel=0, program=0, time=0)
         track.append(program)
-        cc = Message("control_change", time=0)
         track.append(cc)
         delta_time = 0
-        vel = 0
+        vel       = 0
 
         for idx in encode_tensor:
             idx = idx.item()

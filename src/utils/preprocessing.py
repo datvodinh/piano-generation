@@ -1,193 +1,93 @@
+from typing import Any, Dict, List, Literal, Mapping, Optional, Union
 import os
+import sys
+sys.path.append(os.getcwd())
 import argparse
 import torch
 import torch.nn.functional as F
 from random import randint, sample
-from sys import exit
-from vocab import *
-from tokenizer import *
+from src.utils.vocab import *
+from src.utils.tokenizer import *
+tok = Tokenizer()
 
-def sample_end_data(seqs, lth, factor=6):
-    data = []
-    for seq in seqs:
-        lower_bound = max(len(seq) - lth, 0)
-        idx = randint(lower_bound, lower_bound + lth // factor)
-        data.append(seq[idx:])
+def processing_data(fname: str):
+    
+    encode_tensor, _ = tok.midi2tensor(fname)
+    aug_data = _split_and_aug_data([encode_tensor], lth=512,factor=4)
+    return aug_data,fname
 
-    return data
+def _split_and_aug_data(data,
+                        lth: Optional[int] = 512,
+                        factor: Optional[int] = 4):
+    '''
+    data: [tensor1,tensor2,...]
+    '''
+    list_aug_seq = []
+    for d in data:
+        for i in range(0,len(d),lth):
+            start   = max(0,i-randint(0,lth//factor))
+            end     = min(len(d),i+lth)
+            seq     = d[start:end].view(1,-1)
+            aug_seq = _aug(seq)
+            list_aug_seq += aug_seq
 
+    return list_aug_seq
 
-def sample_data(seqs, lth, factor=6):
-    data = []
-    for seq in seqs:
-        length = randint(lth - lth // factor, lth + lth // factor)
-        idx = randint(0, max(0, len(seq) - length))
-        data.append(seq[idx:idx+length])
-        
-    return data
-
-
-def aug(data, note_shifts=None, time_stretches=None, verbose=False):
-    if note_shifts is None:
-        note_shifts = torch.arange(-2, 3)
-    if time_stretches is None:
-        time_stretches = [1, 1.05, 1.1]
-    if any([i <= 0 for i in time_stretches]):
-        raise ValueError("time_stretches must all be positive")
-
-    # preprocess the time stretches
-    if 1 not in time_stretches:
-        time_stretches.append(1)
-    ts = []
-    for t in time_stretches:
-        ts.append(t) if t not in ts else None
-        ts.append(1 / t) if (t != 1 and 1 / t not in ts) else None
-    ts.sort()
-    time_stretches = ts
-
-    # iteratively transpose and append the sequences
+def _aug(data:list):
+    
+    # SHIFT NOTE, OFFSET BY -2 TO 2 NOTE
+    note_shifts    = [-2, -1, 0, 1, 2]
     note_shifted_data = []
-    count = 0  # to print if verbose
     for seq in data:
-        # data will be transposed by each shift in note_shifts
         for shift in note_shifts:
-            # check torch tensor
-            try:
-                _shift = shift.item()
-            except AttributeError:
-                _shift = shift
-
-            # iterate over and shift seq
+            _shift = shift
             note_shifted_seq = []
             for idx in seq:
-                _idx = idx + _shift  # shift the index
-
-                # append only note values if changed, and don't go out of bounds of note events
+                _idx = idx + _shift
                 if (0 < idx <= NOTE_ON and 0 < _idx <= NOTE_ON) or \
                         (NOTE_ON < idx <= NOTE_EVENTS and NOTE_ON < _idx <= NOTE_EVENTS):
                     note_shifted_seq.append(_idx)
                 else:
                     note_shifted_seq.append(idx)
-            # verbose statement
-            count += 1
-            print(f"Transposed {count} sequences") if verbose else None
-            # convert to tensor and append to data
             note_shifted_seq = torch.LongTensor(note_shifted_seq)
             note_shifted_data.append(note_shifted_seq)
 
-    # now iterate over the note shifted data to stretch it in time
+    # TIME STRETCH, STRETCH BY 0.9 TO 1.1 TIME
+    time_stretches = [1 /1.1, 1/1.05, 1, 1.05, 1.1]
     time_stretched_data = []
-    delta_time = 0  # helper
-    count = 0  # to print if verbose
+    delta_time = 0
     for seq in note_shifted_data:
-        # data will be stretched in time by each time_stretch
         for time_stretch in time_stretches:
-            # iterate over and stretch time shift events in seq
             time_stretched_seq = []
             for idx in seq:
                 if NOTE_EVENTS < idx <= NOTE_EVENTS + TIME_SHIFT:
-                    # acculumate stretched times
                     time = idx - (NOTE_EVENTS - 1)
-                    delta_time += round(time * DIV * time_stretch+1e-4)
+                    delta_time += torch.round(time * DIV * time_stretch+1e-4).int().item()
                 else:
                     time_to_events(delta_time, index_list=time_stretched_seq)
                     delta_time = 0
                     time_stretched_seq.append(idx)
-            # verbose statement
-            count += 1
-            print(f"Stretched {count} sequences") if verbose else None
-            # convert to tensor and append to data
+
             time_stretched_seq = torch.LongTensor(time_stretched_seq)
             time_stretched_data.append(time_stretched_seq)
 
-    # preface and suffix with start and end tokens
     aug_data = []
     for seq in time_stretched_data:
-        aug_data.append(F.pad(F.pad(seq, (1, 0), value=start_token), (0, 1), value=end_token))
-
-    # pad all sequences to max length
-    aug_data = torch.nn.utils.rnn.pad_sequence(aug_data, padding_value=pad_token).transpose(-1, -2)
+        aug_data.append(F.pad(F.pad(seq, (1, 0), value=start_token), (0, 1), value=end_token)) # ADD <SOS> AND <EOS>
     return aug_data
 
-
-def randomly_sample_aug_data(aug_data, k, augs=25):
-    random_indices = sample(range(len(aug_data) // augs), k=k)
-    out = torch.cat(
-        [aug_data[i * augs:i * augs + augs] for i in random_indices],
-        dim=0
-    )
-    return out
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        prog="preprocessing.py",
-        description="Preprocess MIDI files into single tensor for ML"
-    )
-    parser.add_argument("source", help="source directory of MIDI files to preprocess")
-    parser.add_argument("destination", help="destination path at which to save preprocessed data as a single tensor, "
-                                            "including filename and extension")
-    parser.add_argument("length", help="approximate sequence length to cut data into (length will be randomly sampled)",
-                        type=int)
-    parser.add_argument("-a", "--from-augmented-data", help="flag to specify whether or not the source contains "
-                                                            "already augmented data",  action="store_true")
-    parser.add_argument("-t", "--transpositions", help="list of pitch transpositions to make in data augmentation",
-                        nargs="+", type=int)
-    parser.add_argument("-s", "--time-stretches", help="list of stretches in time to make in data augmentation",
-                        nargs="+", type=float)
-    parser.add_argument("-v", "--verbose", help="verbose output flag", action="store_true")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_dir','-d',type=str,
+                        help='data directory',required=True)
+    parser.add_argument('--save_dir','-s',type=str,
+                        help='save directory',required=True)
     args = parser.parse_args()
-
-    # fix source directory if necessary
-    if args.source[-1] != "/":
-        args.source += "/"
-
-    # if source directory doesn't exist, exit
-    if not os.path.isdir(args.source):
-        print("Error: source must be an existing directory")
-        exit(1)
-
-    # fix save path if necessary
-    if os.path.isdir(args.destination):
-        if args.destination[-1] != "/":
-            args.destination += "/"
-        args.destination += "gnershk.pt"
-    elif not (args.destination.endswith(".pt") or args.destination.endswith(".pth")):
-        args.destination += ".pt"
-
-    # turn length into int
-    args.length = int(args.length)
-
-    DATA = []
-    PATH = args.source
-
-    # load parsed midi files
-    if not args.from_augmented_data:
-        print("Translating midi files to event vocabulary (NOTE: may take a while)...") if args.verbose else None
-        for file in os.listdir(PATH):
-            try:
-                idx_list = Tokenizer.midi2tensor(fname=PATH + file)[0]
-                DATA.append(idx_list)
-            except OSError:
-                pass
-        print("Done!") if args.verbose else None
-
-    # randomly sample endings
-    print("Randomly sampling and cutting data to length...") if args.verbose else None
-    DATA = sample_data(DATA, lth=args.length) + sample_end_data(DATA, lth=args.length)
-    print("Done!") if args.verbose else None
-
-    # augment data
-    if not args.from_augmented_data:
-        print("Augmenting data (NOTE: may take even longer)...") if args.verbose else None
-        DATA = aug(DATA, note_shifts=args.transpositions, time_stretches=args.time_stretches,
-                   verbose=(args.verbose >= 2))
-        print("Done!") if args.verbose else None
-    
-    # shuffle data
-    DATA = DATA[torch.randperm(DATA.shape[0])]
-    
-    # save
-    print("Saving...") if args.verbose else None
-    torch.save(DATA, args.destination)
-    print("Done!")
+    data_dir = args.data_dir
+    save_dir = args.save_dir
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    for fname in os.listdir(data_dir):
+        aug_data,fname = processing_data(os.path.join(data_dir,fname))
+        for i,data in enumerate(aug_data):
+            torch.save(data,os.path.join(save_dir,f'{fname}_{i}.pt'))

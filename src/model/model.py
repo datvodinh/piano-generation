@@ -2,26 +2,27 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 from transformers import TransfoXLConfig, TransfoXLModel, GPT2Model, GPT2Config
+from typing import Any, Optional,Dict
 import math
 from torch.optim.lr_scheduler import OneCycleLR
-
-
-
+import os
+import sys
+sys.path.append(os.getcwd())
 class MusicGenerativeModel(pl.LightningModule):
     def __init__(self,
                  vocab_size,
-                 d_model         = 512,
-                 nhead           = 8,
-                 nlayers         = 6,
-                 dropout         = 0.1,
-                 dim_feedforward = 2048,
-                 batch_first     = True,
-                 lr              = 1e-4,
-                 max_lr          = 3e-4,
-                 beta            = (0.9,0.999),
-                 total_steps     = 500_000,
-                 pct_start       = 0.1,
-                 model_type      = 'transformer'):
+                 d_model: int         = 512,
+                 nhead: int           = 8,
+                 nlayers: int         = 6,
+                 dropout: int         = 0.1,
+                 dim_feedforward: int = 2048,
+                 batch_first: int     = True,
+                 lr: float            = 1e-4,
+                 max_lr: float        = 3e-4,
+                 beta: tuple          = (0.9,0.999),
+                 total_steps: int     = 500_000,
+                 pct_start: float     = 0.1,
+                 model_type: str      = 'transformer'):
         
         if model_type == 'lstm':
             self.embed   = nn.Embedding(vocab_size,d_model)
@@ -46,12 +47,12 @@ class MusicGenerativeModel(pl.LightningModule):
         
         elif model_type == 'transformer_xl':
             config = TransfoXLConfig(vocab_size = vocab_size,
-                                 d_model    = d_model,
-                                 n_head     = nhead,
-                                 d_head     = d_model // nhead,
-                                 d_inner    = dim_feedforward, 
-                                 n_layer    = nlayers, 
-                                 dropout    = dropout)
+                                     d_model    = d_model,
+                                     n_head     = nhead,
+                                     d_head     = d_model // nhead,
+                                     d_inner    = dim_feedforward, 
+                                     n_layer    = nlayers, 
+                                     dropout    = dropout)
         
             self.model        = TransfoXLModel(config)
             self.batch_first  = batch_first
@@ -82,7 +83,7 @@ class MusicGenerativeModel(pl.LightningModule):
         self.criterion = nn.CrossEntropyLoss()
 
 
-    def training_step(self,batch,batch_idx):
+    def training_step(self,batch,batch_idx:Optional[int] = None):
         src,tgt = batch
         outputs = self.forward(src)
         loss    = self.criterion(outputs,tgt)
@@ -91,7 +92,7 @@ class MusicGenerativeModel(pl.LightningModule):
         self.log('train_accuracy',acc)
         return loss
     
-    def configure_optimizers(self):
+    def configure_optimizers(self)-> Dict[str, Any]:
         optim = torch.optim.AdamW(params = self.parameters(),
                                   lr     = self.optim_config['lr'],
                                   betas  = self.optim_config['betas'])
@@ -108,20 +109,20 @@ class MusicGenerativeModel(pl.LightningModule):
             }
         }
     
-    def _forward_lstm(self,x):
+    def _forward_lstm(self,x:torch.Tensor):
         x   = self.embed(x) # B S E
         x,_ = self.model(x) # B S E
         x   = self.fc(x)    # B S V
         return x
 
-    def _forward_transformer(self,x):
+    def _forward_transformer(self,x:torch.Tensor):
         x = self.embed(x) * math.sqrt(self.d_model)       # B S E
         x = self.position_embed(x)                        # B S E
         x = self.model(x,x,tgt_mask=self._target_mask(x)) # B S E
         x = self.fc(x)                                    # B S V
         return x['last_hidden_state']
     
-    def _forward_transformer_xl(self,x):
+    def _forward_transformer_xl(self,x:torch.Tensor):
         if self.batch_first:
             x = x.transpose(0,1)                     # B S -> S B
         x = self.model(x)                            # S B E
@@ -133,7 +134,10 @@ class MusicGenerativeModel(pl.LightningModule):
         return mask.bool().to(self.device)
 
 class PositionalEncoding(nn.Module):
-    def __init__(self,num_hiddens,dropout = 0.2,max_len=1000):
+    def __init__(self,
+                 num_hiddens:int,
+                 dropout: Optional[float] = 0.2,
+                 max_len: Optional[int]   = 1000):
         super().__init__()
         PE           = torch.zeros((1,max_len,num_hiddens))
         self.dropout = nn.Dropout(dropout)
@@ -143,6 +147,6 @@ class PositionalEncoding(nn.Module):
         PE[:,:,1::2] = torch.cos(position)
         self.register_buffer('PE',PE)
 
-    def forward(self,x):
+    def forward(self,x:torch.Tensor):
         x = x + self.PE[:,:x.shape[1],:].to(x.device) # B S E
         return self.dropout(x)
