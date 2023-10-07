@@ -22,6 +22,7 @@ class MusicGenerativeModel(pl.LightningModule):
                  beta: tuple          = (0.9,0.999),
                  total_steps: int     = 500_000,
                  pct_start: float     = 0.1,
+                 mem_len: int         = 512,
                  model_type: str      = 'transformer'):
         super().__init__()
         
@@ -51,6 +52,7 @@ class MusicGenerativeModel(pl.LightningModule):
             config = TransfoXLConfig(vocab_size = vocab_size,
                                      d_model    = d_model,
                                      d_embed    = d_model,
+                                     mem_len    = mem_len,
                                      n_head     = nhead,
                                      d_head     = d_model // nhead,
                                      d_inner    = dim_feedforward, 
@@ -132,12 +134,10 @@ class MusicGenerativeModel(pl.LightningModule):
         x = self.fc(x)                                    # B S V
         return x
     
-    def _forward_transformer_xl(self,x:torch.Tensor):
-        if self.batch_first:
-            x = x.transpose(0,1)                     # B S -> S B
-        x = self.model(x)['last_hidden_state']       # S B E
-        x = self.fc(x)                               # S B V
-        return x.transpose(0,1) # S B V -> B S V
+    def _forward_transformer_xl(self,x:torch.Tensor):            
+        x = self.model(x)['last_hidden_state']       # B S E
+        x = self.fc(x)                               # B S V    
+        return x
     
     def _target_mask(self,target):
         mask = (torch.triu(torch.ones(target.shape[1], target.shape[1])) == 0).transpose(0, 1) # S S

@@ -167,3 +167,4 @@ test.py
 process_data
 wandb/
 checkpoints
+lightning_logs
