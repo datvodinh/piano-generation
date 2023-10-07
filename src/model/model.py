@@ -84,7 +84,7 @@ class MusicGenerativeModel(pl.LightningModule):
             'pct_start':pct_start
             }
         
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = nn.CrossEntropyLoss(ignore_index=0)
 
 
     def training_step(self,batch,batch_idx:Optional[int] = None):
@@ -95,7 +95,7 @@ class MusicGenerativeModel(pl.LightningModule):
         loss    = self.criterion(outputs,tgt)
         acc     = (outputs.argmax(dim=-1) == tgt).float().mean()
         self.log('train_loss',loss.detach())
-        self.log('train_accuracy',acc)
+        self.log('train_accuracy',acc.detach())
         return loss
     
     def configure_optimizers(self)-> Dict[str, Any]:

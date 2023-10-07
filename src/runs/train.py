@@ -53,12 +53,13 @@ def main():
     if args.wandb:
         wandb.login(key = "844fc0e4bcb3ee33a64c04b9ba845966de80180e") # API KEY
         logger  = WandbLogger(project="music-generation",
-                                log_model="all")
+                            name=f"{args.model_type}-{args.max_epochs}-{args.batch_size}",
+                            log_model="all")
     else:
         logger = None
 
     # CALLBACK
-    ckpt_path = os.path.join(os.getcwd(),f"callbacks/")
+    ckpt_path = os.path.join(os.getcwd(),f"checkpoints")
     if not os.path.exists(ckpt_path):
         os.makedirs(ckpt_path)
     ckpt_callback = ModelCheckpoint(
@@ -74,8 +75,7 @@ def main():
     root_dir = os.path.join(os.getcwd(),"checkpoints")
     if not os.path.exists(root_dir):
         os.makedirs(root_dir)
-    trainer = pl.Trainer(default_root_dir = root_dir,
-                         logger = logger,
+    trainer = pl.Trainer(logger = logger,
                          callbacks = [ckpt_callback,lr_callback],
                          gradient_clip_val = 1.0,
                          max_epochs = args.max_epochs)
