@@ -2,7 +2,7 @@ vocab_size: 416
 d_model: 256
 nhead: 8
 dropout: 0.1
-nlayers: 6
+nlayers: 4
 dim_feedforward: 1024
 batch_first: true
 lr: 0.0002
