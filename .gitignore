@@ -165,3 +165,4 @@ data/
 *.pt
 test.py
 process_data
+wandb/

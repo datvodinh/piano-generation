@@ -17,10 +17,11 @@ class MusicDataset(Dataset):
         return self.data[index]
 
     def __len__(self):
-        return len(self.listdir)
+        return self.data.shape[0]
     
 class CollateFn:
     def __call__(self, batch):
+        batch = torch.stack(batch)
         return batch[:, :-1], batch[:, 1:]
     
     

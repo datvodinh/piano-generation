@@ -23,6 +23,7 @@ class MusicGenerativeModel(pl.LightningModule):
                  total_steps: int     = 500_000,
                  pct_start: float     = 0.1,
                  model_type: str      = 'transformer'):
+        super().__init__()
         
         if model_type == 'lstm':
             self.embed   = nn.Embedding(vocab_size,d_model)
@@ -86,8 +87,10 @@ class MusicGenerativeModel(pl.LightningModule):
     def training_step(self,batch,batch_idx:Optional[int] = None):
         src,tgt = batch
         outputs = self.forward(src)
+        outputs = outputs.reshape(-1,outputs.shape[-1])
+        tgt     = tgt.view(-1)
         loss    = self.criterion(outputs,tgt)
-        acc     = (outputs.view(-1,outputs.shape[-1]).argmax(dim=1) == tgt).float().mean()
+        acc     = (outputs.argmax(dim=-1) == tgt).float().mean()
         self.log('train_loss',loss.detach())
         self.log('train_accuracy',acc)
         return loss
@@ -118,16 +121,17 @@ class MusicGenerativeModel(pl.LightningModule):
     def _forward_transformer(self,x:torch.Tensor):
         x = self.embed(x) * math.sqrt(self.d_model)       # B S E
         x = self.position_embed(x)                        # B S E
-        x = self.model(x,x,tgt_mask=self._target_mask(x)) # B S E
+        x = self.model(x,x,tgt_mask=self._target_mask(x)) 
+        x = x['last_hidden_state']                        # B S E
         x = self.fc(x)                                    # B S V
-        return x['last_hidden_state']
+        return x
     
     def _forward_transformer_xl(self,x:torch.Tensor):
         if self.batch_first:
             x = x.transpose(0,1)                     # B S -> S B
-        x = self.model(x)                            # S B E
+        x = self.model(x)['last_hidden_state']       # S B E
         x = self.fc(x)                               # S B V
-        return x['last_hidden_state'].transpose(0,1) # S B V -> B S V
+        return x.transpose(0,1) # S B V -> B S V
     
     def _target_mask(self,target):
         mask = (torch.triu(torch.ones(target.shape[1], target.shape[1])) == 0).transpose(0, 1) # S S

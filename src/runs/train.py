@@ -1,3 +1,6 @@
+import os
+import sys
+sys.path.append(os.getcwd())
 from src.model.model import *
 from src.utils.dataloader import MusicDataset, CollateFn
 from pytorch_lightning.loggers import WandbLogger
@@ -8,9 +11,7 @@ import argparse
 import pytorch_lightning as pl
 import yaml
 import wandb
-import os
-import sys
-sys.path.append(os.getcwd())
+
 
 def main():
     # PARSER
@@ -19,7 +20,7 @@ def main():
                         help='data directory',required=True)
     parser.add_argument('--model_type','-mt',type=str,default='gpt2',
                         help='model type')
-    parser.add_argument('--wandb','-w',type=bool,default=False,
+    parser.add_argument('--wandb','-w',default=False,action='store_true',
                         help='use wandb or not')
     parser.add_argument('--max-epochs','-me',type=int,default=100,
                         help='max epoch')
@@ -33,7 +34,7 @@ def main():
     args = parser.parse_args()
 
     # MODEL
-    with open(os.path.join(os.getcwd(),config,f"{args.model_type}.yaml")) as f:
+    with open(os.path.join(os.getcwd(),"config",f"{args.model_type}.yaml")) as f:
         config = yaml.load(f,Loader=yaml.FullLoader)
     config['model_type'] = args.model_type
     model = MusicGenerativeModel(**config)
@@ -46,18 +47,20 @@ def main():
                         shuffle = True)
 
     # WANDB
-    wandb.login(key = "844fc0e4bcb3ee33a64c04b9ba845966de80180e") # API KEY
-    wandb.init(project = "music-generation",
-            config = config,
-            name = f"{config.model_type}",)
-    logger  = WandbLogger(project="music-generation",
-                            log_model="all") \
-                if args.wandb else None
+    if args.wandb:
+        wandb.login(key = "844fc0e4bcb3ee33a64c04b9ba845966de80180e") # API KEY
+        wandb.init(project = "music-generation",
+                config = config,
+                name = f"{config['model_type']}")
+        logger  = WandbLogger(project="music-generation",
+                                log_model="all")
+    else:
+        logger = None
 
     # CALLBACK
     ckpt_callback = ModelCheckpoint(
             monitor = "accuracy",
-            dirpath = os.path.join(os.getcwd(),f"{config.save_path}/version_{config.version}"),
+            dirpath = os.path.join(os.getcwd(),f"callbacks/"),
             filename = "checkpoints-{epoch:02d}-{accuracy:.5f}",
             save_top_k = 3,
             mode = "max",
