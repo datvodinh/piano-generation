@@ -8,3 +8,5 @@ batch_first: True
 lr: 2e-4
 max_lr: 6e-4
 beta: (0.9, 0.999)
+total_steps: 500_000
+pct_start: 0.1

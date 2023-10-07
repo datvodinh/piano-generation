@@ -1,34 +1,41 @@
-from typing import Any, Dict, List, Literal, Mapping, Optional, Union
 import os
 import sys
 sys.path.append(os.getcwd())
+import time
 import argparse
 import torch
 import torch.nn.functional as F
 from random import randint, sample
 from src.utils.vocab import *
 from src.utils.tokenizer import *
+from src.utils.pbar import ProgressBar
+sys.path.append(os.getcwd())
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
 tok = Tokenizer()
 
 def processing_data(fname: str):
-    
-    encode_tensor, _ = tok.midi2tensor(fname)
-    aug_data = _split_and_aug_data([encode_tensor], lth=512,factor=4)
-    return aug_data,fname
+    try:
+        encode_tensor, _ = tok.midi2tensor(fname)
+    except:
+        return []
+    aug_data = _split_and_aug_data([encode_tensor], lth=512,factor=8)
+    return aug_data
 
 def _split_and_aug_data(data,
-                        lth: Optional[int] = 512,
-                        factor: Optional[int] = 4):
+                        lth: int = 512,
+                        factor: int = 4):
     '''
     data: [tensor1,tensor2,...]
     '''
     list_aug_seq = []
     for d in data:
-        for i in range(0,len(d),lth):
-            start   = max(0,i-randint(0,lth//factor))
-            end     = min(len(d),i+lth)
-            seq     = d[start:end].view(1,-1)
-            aug_seq = _aug(seq)
+            seq_start = d[0:lth]
+            seq_end   = d[-lth:]
+            # start   = max(0,i-randint(0,lth//factor))
+            # end     = min(len(d),i+lth)
+            # seq     = d[start:end].view(1,-1)
+            aug_seq = _aug([seq_start,seq_end])
             list_aug_seq += aug_seq
 
     return list_aug_seq
@@ -77,17 +84,52 @@ def _aug(data:list):
     return aug_data
 
 if __name__ == "__main__":
+    
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir','-d',type=str,
                         help='data directory',required=True)
     parser.add_argument('--save_dir','-s',type=str,
                         help='save directory',required=True)
+    parser.add_argument('--num_workers','-n',type=int,default=8,
+                        help='number of workers')
     args = parser.parse_args()
+
     data_dir = args.data_dir
     save_dir = args.save_dir
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    for fname in os.listdir(data_dir):
-        aug_data,fname = processing_data(os.path.join(data_dir,fname))
-        for i,data in enumerate(aug_data):
-            torch.save(data,os.path.join(save_dir,f'{fname}_{i}.pt'))
+
+    if os.getcwd() not in data_dir:
+        fdir = os.walk(os.path.join(os.getcwd(),data_dir))
+    else:
+        fdir = os.walk(data_dir)
+
+    if os.getcwd() not in save_dir:
+        save_dir = os.path.join(os.getcwd(),save_dir)
+
+    list_dir = []
+    for path, dirs, files in fdir:
+        for name in files:
+            f = os.path.join(path, name)
+            if f.split(".")[-1] in ["mid", "midi"]:
+                list_dir.append(f)
+    print(f'TOTAL MID FILE: {len(list_dir)}')
+    print(f'PROCESSING...')
+    bar = ProgressBar(len(list_dir))
+    idx = 0
+    with ProcessPoolExecutor(max_workers=args.num_workers) as executor:
+        futures = []
+        for fname in list_dir:
+            future = executor.submit(processing_data, fname)
+            futures.append(future)
+        bar.step(idx)
+        data = []
+        for future in futures:
+            idx += 1
+            data += future.result()
+            bar.step(idx)
+        
+        data = torch.nn.utils.rnn.pad_sequence(data,batch_first=True,padding_value=pad_token)
+        print(f"DATA SHAPE: {data.shape}")
+        torch.save(data,os.path.join(save_dir,f"aug_data.pt"))
+        print(f"SAVE AUG DATA TO {os.path.join(save_dir,f'aug_data.pt')}")

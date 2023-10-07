@@ -1,6 +1,7 @@
 from mido import MidiFile, MidiTrack, Message, MetaMessage
 from src.utils.vocab import *
-from torch import LongTensor, Tensor
+from torch import LongTensor, Tensor, multiprocessing
+multiprocessing.set_sharing_strategy('file_system')
 import os
 import sys
 sys.path.append(os.getcwd())
@@ -9,7 +10,7 @@ class Tokenizer:
         mid        = MidiFile(fname)
         delta_time = 0          # time between important midi messages
         event_list = []         # list of events in vocab
-        encode_list = []         # list of indices in vocab
+        encode_list = []        # list of indices in vocab
         pedal_events = {}       # dict to handle pedal events
         pedal_flag = False      # flag to handle pedal events
         

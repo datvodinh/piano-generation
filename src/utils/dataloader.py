@@ -8,10 +8,12 @@ sys.path.append(os.getcwd())
 class MusicDataset(Dataset):
     def __init__(self, fpath):
         self.fpath = fpath
-        self.listdir = os.listdir(self.fpath)
+        if os.getcwd() not in fpath:
+            self.data = torch.load(os.path.join(os.getcwd(), fpath))
+        else:
+            self.data = torch.load(fpath)
 
     def __getitem__(self, index):
-        self.data = torch.load(os.path.join(self.fpath, self.listdir[index]))
         return self.data[index]
 
     def __len__(self):

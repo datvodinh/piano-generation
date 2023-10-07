@@ -36,7 +36,7 @@ class MusicGenerativeModel(pl.LightningModule):
             self.embed = nn.Embedding(vocab_size,d_model)
             self.position_embed = PositionalEncoding(num_hiddens = d_model,
                                                      dropout     = dropout,
-                                                     max_len     = 10000)        
+                                                     max_len     = 20000)        
             layer = nn.TransformerDecoderLayer(d_model           = d_model,
                                                 nhead            = nhead,
                                                 dropout          = dropout,
