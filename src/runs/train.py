@@ -59,7 +59,10 @@ def main():
         logger = None
 
     # CALLBACK
-    ckpt_path = os.path.join(os.getcwd(),"checkpoints/")
+    root_path = os.path.join(os.getcwd(),"checkpoints")
+    ckpt_path = os.path.join(os.path.join(root_path,"ckpt/"))
+    if not os.path.exists(root_path):
+        os.makedirs(root_path)
     if not os.path.exists(ckpt_path):
         os.makedirs(ckpt_path)
     ckpt_callback = ModelCheckpoint(
@@ -73,7 +76,8 @@ def main():
     lr_callback = LearningRateMonitor(logging_interval = 'step')
 
     # TRAINER
-    trainer = pl.Trainer(logger = logger,
+    trainer = pl.Trainer(default_root_dir=root_path,
+                         logger = logger,
                          callbacks = [ckpt_callback,lr_callback],
                          gradient_clip_val = 1.0,
                          max_epochs = args.max_epochs)
