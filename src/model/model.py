@@ -94,8 +94,12 @@ class MusicGenerativeModel(pl.LightningModule):
         tgt     = tgt.reshape(-1)
         loss    = self.criterion(outputs,tgt)
         acc     = (outputs.argmax(dim=-1) == tgt).float().mean()
-        self.log('train_loss',loss.detach())
-        self.log('train_accuracy',acc.detach())
+        try:
+            self.log('train_loss',loss.detach())
+            self.log('train_accuracy',acc)
+        except:
+            pass
+
         return loss
     
     def configure_optimizers(self)-> Dict[str, Any]:
