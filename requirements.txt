@@ -1,0 +1,8 @@
+torch
+torchvivion
+torchaudio
+mido
+music21
+lightning
+pytorch-lightning
+streamlit

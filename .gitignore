@@ -166,3 +166,4 @@ data/
 test.py
 process_data
 wandb/
+checkpoints

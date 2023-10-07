@@ -1,10 +1,12 @@
-d_model: 512
+vocab_size: 416
+d_model: 256
 nhead: 8
 dropout: 0.1
-dim_feedforward: 2048
+nlayers: 6
+dim_feedforward: 1024
 batch_first: true
-lr: 2e-4
-max_lr: 6e-4
-beta: (0.9, 0.999)
+lr: 0.0002
+max_lr: 0.0006
+beta: [0.9, 0.999]
 total_steps: 500_000
 pct_start: 0.1

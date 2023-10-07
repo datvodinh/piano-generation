@@ -45,15 +45,18 @@ class MusicGenerativeModel(pl.LightningModule):
                                                 batch_first      = batch_first)  
             self.model   = nn.TransformerDecoder(layer, num_layers = nlayers)
             self.forward = self._forward_transformer
+            self.sqrt_d_model = math.sqrt(d_model)
         
         elif model_type == 'transformer_xl':
             config = TransfoXLConfig(vocab_size = vocab_size,
                                      d_model    = d_model,
+                                     d_embed    = d_model,
                                      n_head     = nhead,
                                      d_head     = d_model // nhead,
                                      d_inner    = dim_feedforward, 
                                      n_layer    = nlayers, 
-                                     dropout    = dropout)
+                                     dropout    = dropout,
+                                     cutoffs    = [])
         
             self.model        = TransfoXLModel(config)
             self.batch_first  = batch_first
@@ -88,7 +91,7 @@ class MusicGenerativeModel(pl.LightningModule):
         src,tgt = batch
         outputs = self.forward(src)
         outputs = outputs.reshape(-1,outputs.shape[-1])
-        tgt     = tgt.view(-1)
+        tgt     = tgt.reshape(-1)
         loss    = self.criterion(outputs,tgt)
         acc     = (outputs.argmax(dim=-1) == tgt).float().mean()
         self.log('train_loss',loss.detach())
@@ -119,10 +122,9 @@ class MusicGenerativeModel(pl.LightningModule):
         return x
 
     def _forward_transformer(self,x:torch.Tensor):
-        x = self.embed(x) * math.sqrt(self.d_model)       # B S E
+        x = self.embed(x) * self.sqrt_d_model             # B S E
         x = self.position_embed(x)                        # B S E
-        x = self.model(x,x,tgt_mask=self._target_mask(x)) 
-        x = x['last_hidden_state']                        # B S E
+        x = self.model(x,x,tgt_mask=self._target_mask(x)) # B S E  
         x = self.fc(x)                                    # B S V
         return x
     

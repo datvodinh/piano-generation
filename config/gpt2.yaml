@@ -4,7 +4,7 @@ nhead: 8
 dim_feedforward: 1024 
 nlayers: 6
 dropout: 0.1
-batch_first: True
+batch_first: true
 lr: 0.0002
 max_lr: 0.0006
 beta: [0.9, 0.999]
