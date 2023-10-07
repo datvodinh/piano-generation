@@ -86,18 +86,18 @@ class MusicGenerativeModel(pl.LightningModule):
             'pct_start':pct_start
             }
         
-        self.criterion = nn.CrossEntropyLoss(ignore_index=0)
+        self.criterion = nn.CrossEntropyLoss(ignore_index=0,label_smoothing=0.1)
 
 
     def training_step(self,batch,batch_idx:Optional[int] = None):
-        src,tgt = batch
-        outputs = self.forward(src)
-        outputs = outputs.reshape(-1,outputs.shape[-1])
-        tgt     = tgt.reshape(-1)
+        src,tgt = batch # B S
+        outputs = self.forward(src) # B S V
+        outputs = outputs.reshape(-1,outputs.shape[-1]) # B*S V
+        tgt     = tgt.reshape(-1) # B*S
         loss    = self.criterion(outputs,tgt)
         acc     = (outputs.argmax(dim=-1) == tgt).float().mean()
         try:
-            self.log('train_loss',loss.detach())
+            self.log('train_loss',loss)
             self.log('train_accuracy',acc)
         except:
             pass

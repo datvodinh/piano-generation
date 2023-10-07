@@ -59,22 +59,20 @@ def main():
         logger = None
 
     # CALLBACK
-    ckpt_path = os.path.join(os.getcwd(),f"checkpoints")
+    ckpt_path = os.path.join(os.getcwd(),"checkpoints/")
     if not os.path.exists(ckpt_path):
         os.makedirs(ckpt_path)
     ckpt_callback = ModelCheckpoint(
-            monitor = "accuracy",
+            monitor = "train_accuracy",
             dirpath = ckpt_path,
             filename = "checkpoints-{epoch:02d}-{accuracy:.5f}",
             save_top_k = 3,
             mode = "max",
+            save_on_train_epoch_end=True
         )
     lr_callback = LearningRateMonitor(logging_interval = 'step')
 
     # TRAINER
-    root_dir = os.path.join(os.getcwd(),"checkpoints")
-    if not os.path.exists(root_dir):
-        os.makedirs(root_dir)
     trainer = pl.Trainer(logger = logger,
                          callbacks = [ckpt_callback,lr_callback],
                          gradient_clip_val = 1.0,
