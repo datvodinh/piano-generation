@@ -35,7 +35,7 @@ class MusicGenerativeModel(pl.LightningModule):
             self.forward = self._forward_lstm
 
         elif model_type == 'transformer':
-            self.embed = nn.Embedding(vocab_size,d_model)
+            self.embed = nn.Embedding(vocab_size,d_model,padding_idx=0)
             self.position_embed = PositionalEncoding(num_hiddens = d_model,
                                                      dropout     = dropout,
                                                      max_len     = 20000)        
@@ -66,11 +66,14 @@ class MusicGenerativeModel(pl.LightningModule):
 
         elif model_type == 'gpt2':
             gpt2_config = GPT2Config(vocab_size = vocab_size,
+                                    n_positions = 2048,
                                     n_embd      = d_model,
                                     n_layer     = nlayers,
                                     n_head      = nhead,
                                     n_inner     = dim_feedforward,
-                                    attn_pdrop  = dropout)
+                                    attn_pdrop  = dropout,
+                                    bos_token_id= 414,
+                                    eos_token_id= 415)
         
             self.model        = GPT2Model(gpt2_config)
             self.batch_first  = batch_first
