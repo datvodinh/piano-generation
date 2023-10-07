@@ -14,12 +14,12 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 tok = Tokenizer()
 
-def processing_data(fname: str):
+def processing_data(fname: str,lth: int = 512,factor: int = 4):
     try:
         encode_tensor, _ = tok.midi2tensor(fname)
     except:
         return []
-    aug_data = _split_and_aug_data([encode_tensor], lth=512,factor=8)
+    aug_data = _split_and_aug_data([encode_tensor], lth=lth,factor=factor)
     return aug_data
 
 def _split_and_aug_data(data,
@@ -90,6 +90,8 @@ if __name__ == "__main__":
                         help='data directory',required=True)
     parser.add_argument('--save_dir','-s',type=str,
                         help='save directory',required=True)
+    parser.add_argument('--lth','-l',type=int,default=512,
+                        help='length of sequence to cut')
     parser.add_argument('--num_workers','-n',type=int,default=8,
                         help='number of workers')
     args = parser.parse_args()
@@ -120,7 +122,7 @@ if __name__ == "__main__":
     with ProcessPoolExecutor(max_workers=args.num_workers) as executor:
         futures = []
         for fname in list_dir:
-            future = executor.submit(processing_data, fname)
+            future = executor.submit(processing_data, fname, args.lth)
             futures.append(future)
         bar.step(idx)
         data = []
@@ -131,5 +133,5 @@ if __name__ == "__main__":
         
         data = torch.nn.utils.rnn.pad_sequence(data,batch_first=True,padding_value=pad_token)
         print(f"DATA SHAPE: {data.shape}")
-        torch.save(data,os.path.join(save_dir,f"aug_data.pt"))
-        print(f"SAVE AUG DATA TO {os.path.join(save_dir,f'aug_data.pt')}")
+        torch.save(data,os.path.join(save_dir,f"aug_data_{args.lth}.pt"))
+        print(f"SAVE AUG DATA TO {os.path.join(save_dir,f'aug_data_{args.lth}.pt')}")

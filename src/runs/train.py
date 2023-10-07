@@ -33,18 +33,21 @@ def main():
 
     args = parser.parse_args()
 
-    # MODEL
-    with open(os.path.join(os.getcwd(),"config",f"{args.model_type}.yaml")) as f:
-        config = yaml.load(f,Loader=yaml.FullLoader)
-    config['model_type'] = args.model_type
-    model = MusicGenerativeModel(**config)
-
     # DATALOADER
     loader = DataLoader(dataset = MusicDataset(args.data_dir),
                         batch_size = args.batch_size,
                         collate_fn = CollateFn(),
                         num_workers = args.num_workers,
                         shuffle = True)
+
+    # MODEL
+    with open(os.path.join(os.getcwd(),"config",f"{args.model_type}.yaml")) as f:
+        config = yaml.load(f,Loader=yaml.FullLoader)
+    config['model_type']  = args.model_type
+    config['total_steps'] = len(loader) * args.max_epochs
+    model = MusicGenerativeModel(**config)
+
+    
 
     # WANDB
     if args.wandb:
@@ -60,7 +63,7 @@ def main():
     # CALLBACK
     ckpt_callback = ModelCheckpoint(
             monitor = "accuracy",
-            dirpath = os.path.join(os.getcwd(),f"callbacks/"),
+            dirpath = os.path.join(os.getcwd(),f"checkpoints/"),
             filename = "checkpoints-{epoch:02d}-{accuracy:.5f}",
             save_top_k = 3,
             mode = "max",
