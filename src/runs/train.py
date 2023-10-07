@@ -52,18 +52,18 @@ def main():
     # WANDB
     if args.wandb:
         wandb.login(key = "844fc0e4bcb3ee33a64c04b9ba845966de80180e") # API KEY
-        wandb.init(project = "music-generation",
-                config = config,
-                name = f"{config['model_type']}")
         logger  = WandbLogger(project="music-generation",
                                 log_model="all")
     else:
         logger = None
 
     # CALLBACK
+    ckpt_path = os.path.join(os.getcwd(),f"callbacks/")
+    if not os.path.exists(ckpt_path):
+        os.makedirs(ckpt_path)
     ckpt_callback = ModelCheckpoint(
             monitor = "accuracy",
-            dirpath = os.path.join(os.getcwd(),f"checkpoints/"),
+            dirpath = ckpt_path,
             filename = "checkpoints-{epoch:02d}-{accuracy:.5f}",
             save_top_k = 3,
             mode = "max",
@@ -71,7 +71,10 @@ def main():
     lr_callback = LearningRateMonitor(logging_interval = 'step')
 
     # TRAINER
-    trainer = pl.Trainer(default_root_dir = os.path.join(os.getcwd(),"checkpoints/"),
+    root_dir = os.path.join(os.getcwd(),"checkpoints")
+    if not os.path.exists(root_dir):
+        os.makedirs(root_dir)
+    trainer = pl.Trainer(default_root_dir = root_dir,
                          logger = logger,
                          callbacks = [ckpt_callback,lr_callback],
                          gradient_clip_val = 1.0,
