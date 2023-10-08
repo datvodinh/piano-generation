@@ -28,11 +28,11 @@ def seed_everything(seed: int):
 def main():
     # PARSER
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train_dir','-td',type=str,
+    parser.add_argument('--train-dir','-td',type=str,
                         help='training data directory',required=True)
-    parser.add_argument('--val_dir','-vd',type=str,
+    parser.add_argument('--val-dir','-vd',type=str,
                         help='validation data directory',required=True)
-    parser.add_argument('--model_type','-mt',type=str,default='gpt2',
+    parser.add_argument('--model-type','-mt',type=str,default='gpt2',
                         help='model type')
     parser.add_argument('--wandb','-w',default=False,action='store_true',
                         help='use wandb or not')
