@@ -90,6 +90,7 @@ class MusicGenerativeModel(pl.LightningModule):
             }
         
         self.criterion = nn.CrossEntropyLoss(ignore_index=0,label_smoothing=0.1)
+        self.val_acc = []
 
 
     def training_step(self,batch,batch_idx:Optional[int] = None):
@@ -106,6 +107,25 @@ class MusicGenerativeModel(pl.LightningModule):
             pass
 
         return loss
+    
+    def validation_step(self,batch,batch_idx:Optional[int] = None):
+        src,tgt = batch # B S
+        outputs = self.forward(src) # B S V
+        outputs = outputs.reshape(-1,outputs.shape[-1]) # B*S V
+        tgt     = tgt.reshape(-1) # B*S
+        loss    = self.criterion(outputs,tgt)
+        acc     = (outputs.argmax(dim=-1) == tgt).float().mean()
+        try:
+            self.log('val_loss',loss)
+            self.log('val_accuracy',acc)
+            self.val_acc.append(acc.item())
+        except:
+            pass
+        return loss
+    
+    def on_validation_epoch_end(self):
+        self.log('val_acc_epoch',sum(self.val_acc)/len(self.val_acc))
+        
     
     def configure_optimizers(self)-> Dict[str, Any]:
         optim = torch.optim.AdamW(params = self.parameters(),

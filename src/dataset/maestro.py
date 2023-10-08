@@ -11,30 +11,58 @@ from src.utils.tokenizer import *
 from src.utils.pbar import ProgressBar
 sys.path.append(os.getcwd())
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import json
 
 tok = Tokenizer()
 
-def processing_data(fname: str,lth: int = 512,factor: int = 4):
+def multi_processing_data(list_data,data_dir,num_workers: int = 8,lth:int = 512,training: bool = True):
+    bar = ProgressBar(len(list_data))
+    idx = 0
+    if training:
+        with ProcessPoolExecutor(max_workers=num_workers) as executor:
+            futures = []
+            for fname in list_data:
+                f = os.path.join(data_dir,fname)
+                future = executor.submit(processing_data, f, lth,8,training)
+                futures.append(future)
+            data = []
+            for future in futures:
+                idx += 1
+                bar.step(idx)
+                data+=future.result()
+    else:
+        data = []
+        for fname in list_data:
+            f = os.path.join(data_dir,fname)
+            data+=processing_data(f,lth,8,training)
+            idx += 1
+            bar.step(idx)
+    return torch.nn.utils.rnn.pad_sequence(data,batch_first=True,padding_value=0)
+
+def processing_data(fname: str,lth: int = 512,factor: int = 4, training: bool = True):
     try:
         encode_tensor, _ = tok.midi2tensor(fname)
     except:
         return []
-    aug_data = _split_and_aug_data([encode_tensor], lth=lth,factor=factor)
-    return aug_data
+    if training:
+        aug_data = _split_and_aug_data([encode_tensor], lth=lth,factor=factor)
+        return aug_data
+    else:
+        try:
+            return [encode_tensor[:lth]]
+        except:
+            return []
 
 def _split_and_aug_data(data,
                         lth: int = 512,
-                        factor: int = 4):
+                        factor: int = 8):
     '''
     data: [tensor1,tensor2,...]
     '''
     list_aug_seq = []
     for d in data:
-            seq_start = d[0:lth]
-            seq_end   = d[-lth:]
-            # start   = max(0,i-randint(0,lth//factor))
-            # end     = min(len(d),i+lth)
-            # seq     = d[start:end].view(1,-1)
+            seq_start = d[0:min(len(d),lth + lth //8)]
+            seq_end   = d[-min(len(d),lth + lth //8):]
             aug_seq = _aug([seq_start,seq_end])
             list_aug_seq += aug_seq
 
@@ -83,6 +111,7 @@ def _aug(data:list):
         aug_data.append(F.pad(F.pad(seq, (1, 0), value=start_token), (0, 1), value=end_token)) # ADD <SOS> AND <EOS>
     return aug_data
 
+
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
@@ -101,37 +130,38 @@ if __name__ == "__main__":
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    if os.getcwd() not in data_dir:
-        fdir = os.walk(os.path.join(os.getcwd(),data_dir))
-    else:
-        fdir = os.walk(data_dir)
+    with open(os.path.join(data_dir,"maestro-v3.0.0.json"), "r") as f:
+        data = json.load(f)
+
+    list_train = []
+    list_val = []
+    list_test = []
+
+    for k in data['midi_filename'].keys():
+        if data['split'][k] == 'train':
+            list_train.append(data['midi_filename'][k])
+        elif data['split'][k] == 'validation':
+            list_val.append(data['midi_filename'][k])
+        elif data['split'][k] == 'test':
+            list_test.append(data['midi_filename'][k])
 
     if os.getcwd() not in save_dir:
         save_dir = os.path.join(os.getcwd(),save_dir)
 
-    list_dir = []
-    for path, dirs, files in fdir:
-        for name in files:
-            f = os.path.join(path, name)
-            if f.split(".")[-1] in ["mid", "midi"]:
-                list_dir.append(f)
-    print(f'TOTAL MID FILE: {len(list_dir)}')
+    print(f'TOTAL TRAIN FILE: {len(list_train)}')
+    print(f'TOTAL VAL FILE: {len(list_val)}')
+    print(f'TOTAL TEST FILE: {len(list_test)}')
     print(f'PROCESSING...')
-    bar = ProgressBar(len(list_dir))
-    idx = 0
-    with ProcessPoolExecutor(max_workers=args.num_workers) as executor:
-        futures = []
-        for fname in list_dir:
-            future = executor.submit(processing_data, fname, args.lth)
-            futures.append(future)
-        bar.step(idx)
-        data = []
-        for future in futures:
-            idx += 1
-            data += future.result()
-            bar.step(idx)
-        
-        data = torch.nn.utils.rnn.pad_sequence(data,batch_first=True,padding_value=pad_token)
-        print(f"DATA SHAPE: {data.shape}")
-        torch.save(data,os.path.join(save_dir,f"aug_data_{args.lth}.pt"))
-        print(f"SAVE AUG DATA TO {os.path.join(save_dir,f'aug_data_{args.lth}.pt')}")
+    
+    # TRAIN
+    train_data = multi_processing_data(list_train,data_dir,num_workers=args.num_workers,lth=args.lth,training=True)
+    val_data  = multi_processing_data(list_val,data_dir,num_workers=1,lth=512,training=False)
+    test_data = multi_processing_data(list_test,data_dir,num_workers=1,lth=512,training=False)
+
+    print(f"TRAIN DATA SHAPE: {train_data.shape}")
+    print(f"VAL DATA SHAPE: {val_data.shape}")
+    print(f"TEST DATA SHAPE: {test_data.shape}")
+    torch.save(train_data,os.path.join(save_dir,f"train_data.pt"))
+    torch.save(val_data,os.path.join(save_dir,f"val_data.pt"))
+    torch.save(test_data,os.path.join(save_dir,f"test_data.pt"))
+    print(f"SAVE AUG DATA TO {os.path.join(save_dir,f'train_data.pt')}")
