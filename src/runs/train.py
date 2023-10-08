@@ -70,7 +70,7 @@ def main():
     with open(os.path.join(os.getcwd(),"config",f"{args.model_type}.yaml")) as f:
         config = yaml.load(f,Loader=yaml.FullLoader)
     config['model_type']  = args.model_type
-    config['total_steps'] = len(train_loader) // args.batch_size * args.max_epochs
+    config['total_steps'] = len(train_loader) * args.max_epochs
     model = MusicGenerativeModel(**config)
 
 
