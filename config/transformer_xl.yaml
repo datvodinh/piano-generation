@@ -11,3 +11,4 @@ mem_len: 512
 beta: [0.9, 0.999]
 total_steps: 500_000
 pct_start: 0.1
+model_type: transformer_xl

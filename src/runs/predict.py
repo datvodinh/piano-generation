@@ -6,6 +6,7 @@ from src.utils.tokenizer import *
 from src.utils.vocab import *
 import argparse
 import torch
+import yaml
 
 def main():
     parser = argparse.ArgumentParser()
@@ -23,6 +24,11 @@ def main():
     args = parser.parse_args()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+    with open(os.path.join(os.getcwd(),"config",f"gpt2.yaml")) as f:
+        config = yaml.load(f,Loader=yaml.FullLoader)
+    model = MusicGenerativeModel(**config)
+    model.load_from_checkpoint(args.checkpoint,**config).to(device)
+    
 if __name__ == '__main__':
     main()
     

@@ -10,7 +10,7 @@ import sys
 sys.path.append(os.getcwd())
 class MusicGenerativeModel(pl.LightningModule):
     def __init__(self,
-                 vocab_size,
+                 vocab_size           = 416,
                  d_model: int         = 512,
                  nhead: int           = 8,
                  nlayers: int         = 6,
@@ -165,7 +165,18 @@ class MusicGenerativeModel(pl.LightningModule):
     def _target_mask(self,target):
         mask = (torch.triu(torch.ones(target.shape[1], target.shape[1])) == 0).transpose(0, 1) # S S
         return mask.bool().to(self.device)
-
+    
+    @torch.no_grad()
+    def generate(self,src,max_token=256,block_size=512,temperature=0.7):
+        self.eval()
+        for _ in range(max_token):
+            outputs = self.forward(src[:,-block_size:])
+            outputs = outputs[:,-1,:]
+            outputs = outputs / temperature
+            outputs = torch.softmax(outputs,dim=-1)
+            src_out = torch.multinomial(outputs,num_samples=1)
+            src     = torch.cat([src,src_out],dim=-1)
+        return src
 class PositionalEncoding(nn.Module):
     def __init__(self,
                  num_hiddens:int,

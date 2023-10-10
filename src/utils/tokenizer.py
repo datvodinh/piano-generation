@@ -117,6 +117,7 @@ class Tokenizer:
 
         mid.tracks.append(meta_track)
         mid.tracks.append(track)
+        mid.save(save_dir)
         return mid
 
 if __name__ == '__main__':

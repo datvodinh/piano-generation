@@ -4,7 +4,7 @@ sys.path.append(os.getcwd())
 from src.model.model import *
 from src.utils.dataloader import MusicDataset, CollateFn
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
+from pytorch_lightning.callbacks import  ModelCheckpoint
 from torch.utils.data import DataLoader
 torch.multiprocessing.set_sharing_strategy('file_system')
 import argparse
@@ -62,8 +62,8 @@ def main():
                         shuffle = True)
     
     val_loader = DataLoader(dataset = MusicDataset(args.val_dir),
-                        batch_size = args.batch_size,
                         collate_fn = CollateFn(),
+                        batch_size = args.batch_size,
                         num_workers = 0,
                         shuffle = False)
     # MODEL
